@@ -6,580 +6,411 @@ import io
 import sys
 import os
 
-# Configurar o matplotlib para funcionar melhor com pygame
+# Configurar matplotlib para renderizar em memória (backend Agg)
 plt.switch_backend('Agg')
 
 class CorridaEstatistica:
     def __init__(self):
         pygame.init()
         
-        # Configurar tela
-        self.largura, self.altura = 1400, 800
-        self.tela = pygame.display.set_mode((self.largura, self.altura), pygame.RESIZABLE)
-        pygame.display.set_caption("Corrida Estatística - Duelo de Distribuições")
-        os.environ['SDL_VIDEO_CENTERED'] = '1'
+        # --- CONFIGURAÇÕES DE TELA ---
+        self.largura_tela, self.altura_tela = 1150, 720
+        self.tela = pygame.display.set_mode((self.largura_tela, self.altura_tela), pygame.RESIZABLE)
+        pygame.display.set_caption("Corrida Estatística - Gráficos com Eixos Nomeados")
         
-        # Cores - TODAS UNIFORMIZADAS
-        self.cor_fundo = (30, 30, 60)           # Azul escuro uniforme
-        self.cor_area_principal = (40, 40, 80)  # Azul médio
-        self.cor_tabuleiro = (50, 50, 100)      # Azul mais claro para contraste
-        self.cor_borda_tabuleiro = (80, 80, 140)
-        self.cor_texto = (255, 255, 255)
-        self.cor_jogador1 = (255, 100, 100)     # Vermelho
-        self.cor_jogador2 = (100, 180, 255)     # Azul claro
-        self.cor_meta = (255, 215, 0)           # Dourado
-        self.cor_botao = (0, 180, 0)
-        self.cor_botao_hover = (0, 220, 0)
-        self.cor_botao_reiniciar = (180, 0, 0)      # Vermelho para reiniciar
-        self.cor_botao_reiniciar_hover = (220, 0, 0) # Vermelho mais claro
-        self.cor_casa_sorte = (100, 255, 100)       # Verde para casas de sorte
-        self.cor_casa_azar = (255, 100, 100)        # Vermelho para casas de azar
+        # Cores
+        self.C_FUNDO = (30, 30, 45)
+        self.C_PAINEL = (35, 35, 55)
+        self.C_CASA_PADRAO = (200, 190, 170)
+        self.C_CASA_SORTE = (100, 220, 100)
+        self.C_CASA_AZAR = (220, 100, 100)
+        self.C_BORDA = (60, 60, 60)
+        self.C_JOGADOR1 = (255, 80, 80)
+        self.C_JOGADOR2 = (80, 180, 255)
+        self.C_TEXTO = (230, 230, 230)
+        self.C_DESTAQUE = (255, 215, 0)
         
         # Fontes
-        self.fonte = pygame.font.SysFont('Arial', 20)
-        self.fonte_pequena = pygame.font.SysFont('Arial', 16)
-        self.fonte_titulo = pygame.font.SysFont('Arial', 28, bold=True)
-        self.fonte_vencedor = pygame.font.SysFont('Arial', 32, bold=True)
-        self.fonte_evento = pygame.font.SysFont('Arial', 18, bold=True)
+        self.fonte_grande = pygame.font.SysFont('Arial', 26, bold=True)
+        self.fonte_media = pygame.font.SysFont('Arial', 18)
+        self.fonte_pequena = pygame.font.SysFont('Arial', 14, bold=True)
+        self.fonte_mini = pygame.font.SysFont('Arial', 11)
         
-        # Dados dos jogadores
-        self.jogadores = {
-            1: {'posicao': 0, 'dados': [], 'cor': self.cor_jogador1, 'nome': 'Jogador 1'},
-            2: {'posicao': 0, 'dados': [], 'cor': self.cor_jogador2, 'nome': 'Jogador 2'}
-        }
-        
-        self.jogador_atual = 1
-        self.vencedor = None
+        # --- LÓGICA DO JOGO ---
         self.meta = 30
-        
-        # Histórico para gráficos
-        self.historico_medias = {1: [], 2: []}
-        
-        # Estado dos botões
-        self.botao_jogar_hover = False
-        self.botao_reiniciar_hover = False
-        
-        # Casas com consequências (avançar/voltar)
-        self.casas_consequencia = {
-            # Casas de SORTE (avançar)
-            3: {"tipo": "SORTE", "valor": 2, "mensagem": "Atalho encontrado! Avance 2 casas!"},
-            8: {"tipo": "SORTE", "valor": 3, "mensagem": "Vento a favor! Avance 3 casas!"},
-            12: {"tipo": "SORTE", "valor": 1, "mensagem": "Passo rápido! Avance 1 casa!"},
-            18: {"tipo": "SORTE", "valor": 2, "mensagem": "Escada mágica! Avance 2 casas!"},
-            22: {"tipo": "SORTE", "valor": 4, "mensagem": "Super impulso! Avance 4 casas!"},
-            28: {"tipo": "SORTE", "valor": 2, "mensagem": "Quase lá! Avance 2 casas!"},
-            
-            # Casas de AZAR (voltar)
-            4: {"tipo": "AZAR", "valor": 2, "mensagem": "Queda! Volte 2 casas!"},
-            7: {"tipo": "AZAR", "valor": 3, "mensagem": "Armadilha! Volte 3 casas!"},
-            11: {"tipo": "AZAR", "valor": 1, "mensagem": "Escorregão! Volte 1 casa!"},
-            14: {"tipo": "AZAR", "valor": 2, "mensagem": "Teletransporte reverso! Volte 2 casas!"},
-            17: {"tipo": "AZAR", "valor": 4, "mensagem": "Buracão! Volte 4 casas!"},
-            21: {"tipo": "AZAR", "valor": 2, "mensagem": "Falso avanço! Volte 2 casas!"},
-            26: {"tipo": "AZAR", "valor": 3, "mensagem": "Ultimo obstáculo! Volte 3 casas!"}
-        }
-        
-        self.evento_ativado = None
-        self.mensagem_evento = ""
-        self.tempo_evento = 0
-
-    def reiniciar_jogo(self):
-        """Reinicia todo o jogo para o estado inicial"""
         self.jogadores = {
-            1: {'posicao': 0, 'dados': [], 'cor': self.cor_jogador1, 'nome': 'Jogador 1'},
-            2: {'posicao': 0, 'dados': [], 'cor': self.cor_jogador2, 'nome': 'Jogador 2'}
+            1: {'pos': 0, 'dados': [], 'cor': self.C_JOGADOR1, 'nome': 'Jogador 1'},
+            2: {'pos': 0, 'dados': [], 'cor': self.C_JOGADOR2, 'nome': 'Jogador 2'}
         }
-        self.jogador_atual = 1
+        self.turno_atual = 1
         self.vencedor = None
         self.historico_medias = {1: [], 2: []}
-        self.evento_ativado = None
-        self.mensagem_evento = ""
-        print("Jogo reiniciado!")
+        
+        # Estados de exibição
+        self.msg_evento = ""
+        self.timer_evento = 0
+        self.ultimo_lancamento = (0, 0)
+        self.ultimo_resultado_soma = 0
+        self.timer_dados_visiveis = 0
+        
+        # Cache da imagem do gráfico
+        self.img_grafico_cache = None
+        self.dados_para_grafico_atualizados = False
 
-    def ativar_consequencia(self, casa, jogador_id):
-        """Ativa consequência de sorte ou azar baseada na casa"""
-        if casa in self.casas_consequencia:
-            consequencia = self.casas_consequencia[casa]
-            jogador = self.jogadores[jogador_id]
+        # Casas Especiais
+        self.casas_especiais = {
+            3: ("SORTE", 2, "Atalho! +2"), 8: ("SORTE", 3, "Vento! +3"),
+            12: ("SORTE", 1, "Passo! +1"), 18: ("SORTE", 2, "Escada! +2"),
+            22: ("SORTE", 4, "Jato! +4"), 28: ("SORTE", 1, "Quase! +1"),
+            4: ("AZAR", 2, "Queda! -2"), 7: ("AZAR", 3, "Buraco! -3"),
+            11: ("AZAR", 1, "Ops! -1"), 14: ("AZAR", 2, "Volta! -2"),
+            17: ("AZAR", 4, "Crise! -4"), 21: ("AZAR", 2, "Recuo! -2"),
+            26: ("AZAR", 3, "Monstro! -3")
+        }
+
+        # Gerar Tabuleiro
+        self.rects_casas = []
+        self._gerar_layout_tabuleiro()
+
+    def _gerar_layout_tabuleiro(self):
+        """Gera o layout Zig-Zag ajustado (Deslocado para a direita)"""
+        self.rects_casas = []
+        
+        painel_w = 380
+        margem_esquerda_extra = 120 
+        area_x_offset = painel_w + margem_esquerda_extra
+        area_y_offset = 50
+        
+        area_w = self.largura_tela - area_x_offset - 30
+        area_h = self.altura_tela - area_y_offset - 30
+        
+        cols = 6
+        linhas = 5
+        
+        largura_celula = area_w / cols
+        altura_celula = area_h / linhas
+        margem = 6
+        
+        for i in range(self.meta):
+            linha = i // cols
+            coluna = i % cols
             
-            if consequencia["tipo"] == "SORTE":
-                # Avançar casas
-                movimento_extra = consequencia["valor"]
-                jogador['posicao'] += movimento_extra
-                self.mensagem_evento = f"SORTE! {consequencia['mensagem']}"
-                
-            elif consequencia["tipo"] == "AZAR":
-                # Voltar casas
-                movimento_negativo = consequencia["valor"]
-                jogador['posicao'] = max(0, jogador['posicao'] - movimento_negativo)
-                self.mensagem_evento = f"AZAR! {consequencia['mensagem']}"
+            if linha % 2 == 1:
+                coluna = (cols - 1) - coluna
             
-            self.evento_ativado = f"CONSEQUENCIA_{consequencia['tipo']}"
-            self.tempo_evento = 180  # 3 segundos
-
-    def lancar_dados_jogador(self, jogador_id):
-        """Lança dados para um jogador e move o peão"""
-        if self.vencedor:
-            return None
+            linha_visual = (linhas - 1) - linha
             
-        jogador = self.jogadores[jogador_id]
-        
-        # Lançamento normal de 2 dados
-        resultado = sum(random.randint(1, 6) for _ in range(2))
-        self.jogadores[jogador_id]['dados'].append(resultado)
-        
-        # Movimento base (máximo 5 casas por turno para balancear)
-        movimento_base = min(resultado, 5)
-        
-        posicao_anterior = jogador['posicao']
-        self.jogadores[jogador_id]['posicao'] += movimento_base
-        
-        # Atualizar histórico de médias
-        dados_jogador = self.jogadores[jogador_id]['dados']
-        if dados_jogador:
-            media_atual = np.mean(dados_jogador)
-            self.historico_medias[jogador_id].append(media_atual)
-        
-        # Verificar casas com consequências
-        posicao_atual = jogador['posicao']
-        
-        # Verificar se passou por alguma casa de consequência
-        for casa in range(posicao_anterior + 1, posicao_atual + 1):
-            if casa in self.casas_consequencia:
-                self.ativar_consequencia(casa, jogador_id)
-        
-        # Verificar se ganhou
-        if self.jogadores[jogador_id]['posicao'] >= self.meta:
-            self.jogadores[jogador_id]['posicao'] = self.meta
-            self.vencedor = jogador_id
-        
-        return resultado
+            x = area_x_offset + (coluna * largura_celula) + margem
+            y = area_y_offset + (linha_visual * altura_celula) + margem
+            w = largura_celula - (margem * 2)
+            h = altura_celula - (margem * 2)
+            
+            r = pygame.Rect(x, y, w, h)
+            self.rects_casas.append({'rect': r, 'id': i, 'center': r.center})
 
-    def alternar_jogador(self):
-        """Alterna para o próximo jogador"""
-        self.jogador_atual = 3 - self.jogador_atual  # Alterna entre 1 e 2
+    def reiniciar(self):
+        self.jogadores[1]['pos'] = 0
+        self.jogadores[1]['dados'] = []
+        self.jogadores[2]['pos'] = 0
+        self.jogadores[2]['dados'] = []
+        self.turno_atual = 1
+        self.vencedor = None
+        self.historico_medias = {1: [], 2: []}
+        self.msg_evento = ""
+        self.ultimo_lancamento = (0, 0)
+        self.img_grafico_cache = None
+        print("Jogo Reiniciado")
 
-    def calcular_estatisticas_jogador(self, jogador_id):
-        """Calcula estatísticas para um jogador"""
+    def jogar_dados(self):
+        if self.vencedor: return
+
+        jog = self.jogadores[self.turno_atual]
+        
+        d1 = random.randint(1, 6)
+        d2 = random.randint(1, 6)
+        soma = d1 + d2
+        
+        self.ultimo_lancamento = (d1, d2)
+        self.ultimo_resultado_soma = soma
+        self.timer_dados_visiveis = 90
+        
+        jog['dados'].append(soma)
+        self.historico_medias[self.turno_atual].append(np.mean(jog['dados']))
+        self.dados_para_grafico_atualizados = True
+        
+        movimento = min(soma, 5)
+        pos_antiga = jog['pos']
+        jog['pos'] += movimento
+        
+        self._verificar_consequencias(jog['pos'])
+        
+        if jog['pos'] >= self.meta - 1:
+            jog['pos'] = self.meta - 1
+            self.vencedor = self.turno_atual
+            self.msg_evento = f"{jog['nome']} VENCEU!"
+        
+        if not self.vencedor:
+            self.turno_atual = 3 - self.turno_atual
+
+    def _verificar_consequencias(self, fim):
+        idx = min(fim, self.meta - 1)
+        if idx in self.casas_especiais:
+            tipo, valor, texto = self.casas_especiais[idx]
+            jog = self.jogadores[self.turno_atual]
+            self.msg_evento = texto
+            self.timer_evento = 120
+            if tipo == "SORTE":
+                jog['pos'] += valor
+                self.msg_evento += f" (+{valor})"
+            elif tipo == "AZAR":
+                jog['pos'] -= valor
+                if jog['pos'] < 0: jog['pos'] = 0
+                self.msg_evento += f" (-{valor})"
+
+    def _calcular_stats_texto(self, jogador_id):
         dados = self.jogadores[jogador_id]['dados']
         if not dados:
-            return None
-            
-        return {
-            'total_lancamentos': len(dados),
-            'media': np.mean(dados),
-            'mediana': np.median(dados),
-            'moda': max(set(dados), key=dados.count) if dados else 0,
-            'desvio_padrao': np.std(dados),
-            'variancia': np.var(dados),
-            'minimo': min(dados),
-            'maximo': max(dados),
-            'soma_total': sum(dados)
-        }
+            return "Sem dados", "Sem dados", "Sem dados"
+        media = np.mean(dados)
+        mediana = np.median(dados)
+        valores, contagens = np.unique(dados, return_counts=True)
+        indice_moda = np.argmax(contagens)
+        moda = valores[indice_moda]
+        return f"{media:.2f}", f"{mediana:.1f}", f"{moda}"
 
-    def calcular_distribuicao_teorica(self):
-        """Calcula distribuição teórica para soma de 2 dados"""
-        teorica = {}
-        for i in range(1, 7):
-            for j in range(1, 7):
-                soma = i + j
-                teorica[soma] = teorica.get(soma, 0) + 1/36
-        return teorica
+    # --- DESENHAR DADO COM PONTOS ---
+    def _desenhar_dado_pontos(self, x, y, tamanho, valor):
+        rect = pygame.Rect(x, y, tamanho, tamanho)
+        pygame.draw.rect(self.tela, (245, 245, 245), rect, border_radius=8)
+        pygame.draw.rect(self.tela, (20, 20, 20), rect, 2, border_radius=8)
+        
+        raio = tamanho // 9
+        cor_ponto = (0, 0, 0)
+        
+        cx, cy = x + tamanho//2, y + tamanho//2
+        tl_x, tl_y = x + tamanho//4, y + tamanho//4
+        tr_x, tr_y = x + 3*tamanho//4, y + tamanho//4
+        bl_x, bl_y = x + tamanho//4, y + 3*tamanho//4
+        br_x, br_y = x + 3*tamanho//4, y + 3*tamanho//4
+        ml_x, ml_y = x + tamanho//4, y + tamanho//2
+        mr_x, mr_y = x + 3*tamanho//4, y + tamanho//2
+        
+        pontos = []
+        if valor == 1: pontos = [(cx, cy)]
+        elif valor == 2: pontos = [(tl_x, tl_y), (br_x, br_y)]
+        elif valor == 3: pontos = [(tl_x, tl_y), (cx, cy), (br_x, br_y)]
+        elif valor == 4: pontos = [(tl_x, tl_y), (tr_x, tr_y), (bl_x, bl_y), (br_x, br_y)]
+        elif valor == 5: pontos = [(tl_x, tl_y), (tr_x, tr_y), (cx, cy), (bl_x, bl_y), (br_x, br_y)]
+        elif valor == 6: pontos = [(tl_x, tl_y), (tr_x, tr_y), (ml_x, ml_y), (mr_x, mr_y), (bl_x, bl_y), (br_x, br_y)]
+            
+        for px, py in pontos:
+            pygame.draw.circle(self.tela, cor_ponto, (int(px), int(py)), raio)
 
-    def desenhar_tabuleiro_corrida(self):
-        """Desenha o mini-tabuleiro de corrida BONITINHO"""
-        # Área do tabuleiro (canto superior direito)
-        tab_x = self.largura * 0.65
-        tab_y = 50
-        tab_largura = self.largura * 0.3
-        tab_altura = 220
-        
-        # Fundo do tabuleiro com borda elegante
-        pygame.draw.rect(self.tela, self.cor_tabuleiro, 
-                        (tab_x, tab_y, tab_largura, tab_altura), border_radius=12)
-        pygame.draw.rect(self.tela, self.cor_borda_tabuleiro, 
-                        (tab_x, tab_y, tab_largura, tab_altura), 3, border_radius=12)
-        
-        # Título
-        titulo = self.fonte_titulo.render("CORRIDA ESTATÍSTICA", True, (255, 255, 0))
-        self.tela.blit(titulo, (tab_x + (tab_largura - titulo.get_width()) // 2, tab_y + 15))
-        
-        # Pista de corrida
-        pista_y = tab_y + 60
-        pista_altura = 100
-        
-        # Desenhar pista com linhas de marcação
-        pygame.draw.rect(self.tela, (60, 60, 100), 
-                        (tab_x + 40, pista_y, tab_largura - 80, pista_altura))
-        
-        # Linhas da pista
-        for i in range(1, 3):
-            pygame.draw.rect(self.tela, (100, 100, 160), 
-                           (tab_x + 40, pista_y + i * pista_altura//3, 
-                            tab_largura - 80, 2))
-        
-        # Marcar casas de sorte (verde)
-        for casa in [c for c in self.casas_consequencia.keys() if self.casas_consequencia[c]["tipo"] == "SORTE"]:
-            if casa <= self.meta:
-                casa_x = tab_x + 50 + (tab_largura - 120) * (casa / self.meta)
-                pygame.draw.circle(self.tela, self.cor_casa_sorte, (int(casa_x), pista_y - 10), 4)
-        
-        # Marcar casas de azar (vermelho)
-        for casa in [c for c in self.casas_consequencia.keys() if self.casas_consequencia[c]["tipo"] == "AZAR"]:
-            if casa <= self.meta:
-                casa_x = tab_x + 50 + (tab_largura - 120) * (casa / self.meta)
-                pygame.draw.circle(self.tela, self.cor_casa_azar, (int(casa_x), pista_y + pista_altura + 10), 4)
-        
-        # Linha de meta
-        meta_x = tab_x + tab_largura - 70
-        pygame.draw.line(self.tela, self.cor_meta, 
-                        (meta_x, pista_y), (meta_x, pista_y + pista_altura), 4)
-        
-        # Texto da meta
-        texto_meta = self.fonte_pequena.render("META", True, self.cor_meta)
-        self.tela.blit(texto_meta, (meta_x - 20, pista_y - 25))
-        
-        # Legenda das casas especiais
-        legenda_y = pista_y + pista_altura + 30
-        pygame.draw.circle(self.tela, self.cor_casa_sorte, (tab_x + 40, legenda_y), 4)
-        texto_sorte = self.fonte_pequena.render("= Sorte (Avançar)", True, self.cor_texto)
-        self.tela.blit(texto_sorte, (tab_x + 50, legenda_y - 8))
-        
-        pygame.draw.circle(self.tela, self.cor_casa_azar, (tab_x + 200, legenda_y), 4)
-        texto_azar = self.fonte_pequena.render("= Azar (Voltar)", True, self.cor_texto)
-        self.tela.blit(texto_azar, (tab_x + 210, legenda_y - 8))
-        
-        # Desenhar peões dos jogadores
-        for jogador_id in [1, 2]:
-            jogador = self.jogadores[jogador_id]
-            progresso = min(jogador['posicao'] / self.meta, 1.0)
-            peao_x = tab_x + 50 + (tab_largura - 120) * progresso
-            peao_y = pista_y + 25 + (jogador_id - 1) * 35
-            
-            # Desenhar peão (agora mais bonito)
-            pygame.draw.circle(self.tela, jogador['cor'], (int(peao_x), peao_y), 10)
-            pygame.draw.circle(self.tela, (255, 255, 255), (int(peao_x), peao_y), 10, 2)
-            
-            # Sombra do peão
-            pygame.draw.circle(self.tela, (0, 0, 0, 100), (int(peao_x) + 2, peao_y + 2), 10)
-            
-            # Nome e posição
-            texto_pos = self.fonte_pequena.render(
-                f"{jogador['nome']}: {jogador['posicao']}/{self.meta}", True, jogador['cor']
-            )
-            self.tela.blit(texto_pos, (tab_x + 20, peao_y - 25))
-            
-            # Destacar jogador atual
-            if jogador_id == self.jogador_atual and not self.vencedor:
-                pygame.draw.circle(self.tela, (255, 255, 0), (int(peao_x), peao_y), 14, 2)
+    def _desenhar_tabuleiro(self):
+        if len(self.rects_casas) > 1:
+            pontos = [c['center'] for c in self.rects_casas]
+            pygame.draw.lines(self.tela, (60, 60, 80), False, pontos, 5)
+        for casa in self.rects_casas:
+            rect = casa['rect']
+            idx = casa['id']
+            cor = self.C_CASA_PADRAO
+            borda = self.C_BORDA
+            largura_borda = 2
+            if idx in self.casas_especiais:
+                tipo = self.casas_especiais[idx][0]
+                cor = self.C_CASA_SORTE if tipo == "SORTE" else self.C_CASA_AZAR
+            if idx == self.meta - 1:
+                cor = self.C_DESTAQUE
+                borda = (255, 255, 255)
+                largura_borda = 4
+            pygame.draw.rect(self.tela, cor, rect, border_radius=8)
+            pygame.draw.rect(self.tela, borda, rect, largura_borda, border_radius=8)
+            txt = self.fonte_pequena.render(str(idx + 1), True, (50, 50, 50))
+            self.tela.blit(txt, (rect.x + 5, rect.y + 5))
+            if idx in self.casas_especiais:
+                label = self.casas_especiais[idx][2].split('!')[0]
+                txt_evt = self.fonte_mini.render(label, True, (0, 0, 0))
+                self.tela.blit(txt_evt, (rect.centerx - txt_evt.get_width()//2, rect.centery))
+            if idx == self.meta - 1:
+                txt_meta = self.fonte_grande.render("META", True, (0,0,0))
+                self.tela.blit(txt_meta, (rect.centerx - txt_meta.get_width()//2, rect.centery - 10))
 
-    def desenhar_mensagem_evento(self):
-        """Desenha mensagem de evento especial"""
-        if self.tempo_evento > 0 and self.mensagem_evento:
-            # Fundo da mensagem de evento
-            msg_x = self.largura * 0.65
-            msg_y = 280
-            msg_largura = self.largura * 0.3
-            msg_altura = 60
-            
-            # Cor do fundo baseada no tipo de evento
-            if "SORTE" in self.mensagem_evento:
-                cor_fundo = (40, 100, 40)  # Verde escuro para sorte
-                cor_borda = self.cor_casa_sorte
-            elif "AZAR" in self.mensagem_evento:
-                cor_fundo = (100, 40, 40)  # Vermelho escuro para azar
-                cor_borda = self.cor_casa_azar
-            
-            pygame.draw.rect(self.tela, cor_fundo, 
-                            (msg_x, msg_y, msg_largura, msg_altura), border_radius=10)
-            pygame.draw.rect(self.tela, cor_borda, 
-                            (msg_x, msg_y, msg_largura, msg_altura), 2, border_radius=10)
-            
-            texto_evento = self.fonte_evento.render(self.mensagem_evento, True, (255, 255, 200))
-            texto_x = msg_x + (msg_largura - texto_evento.get_width()) // 2
-            texto_y = msg_y + (msg_altura - texto_evento.get_height()) // 2
-            self.tela.blit(texto_evento, (texto_x, texto_y))
-            
-            self.tempo_evento -= 1
+    def _desenhar_peoes(self):
+        for pid, dados in self.jogadores.items():
+            pos_idx = min(dados['pos'], len(self.rects_casas) - 1)
+            rect = self.rects_casas[pos_idx]['rect']
+            cx, cy = rect.center
+            cx += -12 if pid == 1 else 12
+            cy += 8
+            pygame.draw.circle(self.tela, (0,0,0, 100), (cx+2, cy+2), 12)
+            pygame.draw.circle(self.tela, dados['cor'], (cx, cy), 10)
+            pygame.draw.circle(self.tela, (255,255,255), (cx, cy), 10, 2)
+            if pid == self.turno_atual and not self.vencedor:
+                pygame.draw.circle(self.tela, self.C_DESTAQUE, (cx, cy), 14, 2)
 
-    def desenhar_mensagem_vencedor(self):
-        """Desenha a mensagem do vencedor em local reservado"""
+    def _desenhar_painel_esquerdo(self):
+        w_painel = 380
+        pygame.draw.rect(self.tela, self.C_PAINEL, (0, 0, w_painel, self.altura_tela))
+        pygame.draw.line(self.tela, self.C_DESTAQUE, (w_painel, 0), (w_painel, self.altura_tela), 2)
+        
+        y_cursor = 15
+        titulo = self.fonte_grande.render("CORRIDA ESTATÍSTICA", True, self.C_DESTAQUE)
+        self.tela.blit(titulo, (20, y_cursor))
+        
+        y_cursor += 50
+        mouse = pygame.mouse.get_pos()
+        click = pygame.mouse.get_pressed()[0]
+        
+        btn_jogar = pygame.Rect(20, y_cursor, 160, 45)
+        cor_j = (0, 160, 0) if btn_jogar.collidepoint(mouse) else (0, 120, 0)
+        pygame.draw.rect(self.tela, cor_j, btn_jogar, border_radius=6)
+        txt_j = self.fonte_media.render("JOGAR (Espaço)", True, (255,255,255))
+        self.tela.blit(txt_j, (btn_jogar.centerx - txt_j.get_width()//2, btn_jogar.centery - 10))
+        if click and btn_jogar.collidepoint(mouse) and not self.vencedor:
+            pygame.time.wait(150)
+            self.jogar_dados()
+
+        btn_reset = pygame.Rect(190, y_cursor, 160, 45)
+        cor_r = (160, 0, 0) if btn_reset.collidepoint(mouse) else (120, 0, 0)
+        pygame.draw.rect(self.tela, cor_r, btn_reset, border_radius=6)
+        txt_r = self.fonte_media.render("RESET (R)", True, (255,255,255))
+        self.tela.blit(txt_r, (btn_reset.centerx - txt_r.get_width()//2, btn_reset.centery - 10))
+        if click and btn_reset.collidepoint(mouse):
+            self.reiniciar()
+
+        y_cursor += 60
         if not self.vencedor:
-            return
-            
-        # Área reservada para mensagem (abaixo do tabuleiro)
-        msg_x = self.largura * 0.65
-        msg_y = 350 if self.tempo_evento > 0 else 280  # Ajusta posição se houver evento
-        msg_largura = self.largura * 0.3
-        msg_altura = 60
-        
-        # Fundo da mensagem
-        pygame.draw.rect(self.tela, (40, 40, 80), 
-                        (msg_x, msg_y, msg_largura, msg_altura), border_radius=10)
-        pygame.draw.rect(self.tela, (255, 215, 0), 
-                        (msg_x, msg_y, msg_largura, msg_altura), 2, border_radius=10)
-        
-        vencedor = self.jogadores[self.vencedor]
-        texto_vencedor = self.fonte_vencedor.render(
-            f"{vencedor['nome']} VENCEU!", True, vencedor['cor']
-        )
-        
-        # Centralizar texto
-        texto_x = msg_x + (msg_largura - texto_vencedor.get_width()) // 2
-        texto_y = msg_y + (msg_altura - texto_vencedor.get_height()) // 2
-        self.tela.blit(texto_vencedor, (texto_x, texto_y))
+            nome = self.jogadores[self.turno_atual]['nome']
+            cor = self.jogadores[self.turno_atual]['cor']
+            txt_vez = self.fonte_media.render(f"Vez de: {nome}", True, cor)
+            self.tela.blit(txt_vez, (20, y_cursor))
+        else:
+            txt_venc = self.fonte_grande.render("JOGO ENCERRADO", True, self.C_DESTAQUE)
+            self.tela.blit(txt_venc, (20, y_cursor))
 
-    def desenhar_estatisticas_jogadores(self):
-        """Desenha as estatísticas de cada jogador"""
-        stats_x = self.largura * 0.65
-        stats_y = 420  # Abaixo das mensagens
-        
-        for i, jogador_id in enumerate([1, 2]):
-            jogador = self.jogadores[jogador_id]
-            stats = self.calcular_estatisticas_jogador(jogador_id)
-            
-            # Fundo das estatísticas
-            stat_width = self.largura * 0.15
-            stat_height = 180
-            pygame.draw.rect(self.tela, (40, 40, 70), 
-                           (stats_x + i * stat_width, stats_y, stat_width - 10, stat_height), 
-                           border_radius=8)
-            pygame.draw.rect(self.tela, jogador['cor'], 
-                           (stats_x + i * stat_width, stats_y, stat_width - 10, stat_height), 
-                           2, border_radius=8)
-            
-            # Título do jogador
-            titulo = self.fonte.render(jogador['nome'], True, jogador['cor'])
-            self.tela.blit(titulo, (stats_x + i * stat_width + 10, stats_y + 10))
-            
-            if stats:
-                estatisticas = [
-                    f"Lançamentos: {stats['total_lancamentos']}",
-                    f"Média: {stats['media']:.2f}",
-                    f"Mediana: {stats['mediana']:.1f}",
-                    f"Moda: {stats['moda']}",
-                    f"Desvio Padrão: {stats['desvio_padrao']:.2f}",
-                    f"Variância: {stats['variancia']:.2f}",
-                    f"Mín/Máx: {stats['minimo']}/{stats['maximo']}",
-                    f"Soma Total: {stats['soma_total']}",
-                    f"Posição: {jogador['posicao']}/{self.meta}"
-                ]
-                
-                y_offset = stats_y + 40
-                for stat in estatisticas:
-                    texto = self.fonte_pequena.render(stat, True, self.cor_texto)
-                    self.tela.blit(texto, (stats_x + i * stat_width + 10, y_offset))
-                    y_offset += 20
-            else:
-                texto = self.fonte_pequena.render("Sem dados ainda", True, self.cor_texto)
-                self.tela.blit(texto, (stats_x + i * stat_width + 10, stats_y + 50))
+        # --- EXIBIÇÃO DOS DADOS ---
+        y_cursor += 30
+        if self.timer_dados_visiveis > 0:
+            d1, d2 = self.ultimo_lancamento
+            soma = self.ultimo_resultado_soma
+            tamanho_dado = 50
+            self._desenhar_dado_pontos(20, y_cursor, tamanho_dado, d1)
+            self._desenhar_dado_pontos(80, y_cursor, tamanho_dado, d2)
+            txt_soma = self.fonte_grande.render(f"= {soma}", True, (255,255,255))
+            self.tela.blit(txt_soma, (140, y_cursor + 10))
+            self.timer_dados_visiveis -= 1
 
-    def criar_grafico_comparacao(self):
-        """Cria gráfico comparando os dois jogadores"""
-        if len(self.jogadores[1]['dados']) < 2 or len(self.jogadores[2]['dados']) < 2:
-            return None
+        y_cursor += 60
+        pygame.draw.line(self.tela, (100,100,100), (20, y_cursor), (360, y_cursor), 1)
+        y_cursor += 10
+        
+        col_x = [20, 100, 180, 260]
+        titulos = ["", "Média", "Mediana", "Moda"]
+        for i, t in enumerate(titulos):
+            surf = self.fonte_pequena.render(t, True, (180,180,180))
+            self.tela.blit(surf, (col_x[i], y_cursor))
+        
+        y_cursor += 25
+        for pid in [1, 2]:
+            media, mediana, moda = self._calcular_stats_texto(pid)
+            cor = self.jogadores[pid]['cor']
+            t_nome = self.fonte_pequena.render(f"Jog {pid}", True, cor)
+            self.tela.blit(t_nome, (col_x[0], y_cursor))
+            for i, val in enumerate([media, mediana, moda]):
+                t_val = self.fonte_pequena.render(val, True, (255,255,255))
+                self.tela.blit(t_val, (col_x[i+1], y_cursor))
+            y_cursor += 20
 
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
-        fig.patch.set_facecolor('#1E1E3C')  # Cor de fundo uniforme
+        y_cursor += 10
+        if self.timer_evento > 0:
+            r_msg = pygame.Rect(20, y_cursor, 340, 30)
+            pygame.draw.rect(self.tela, (50, 50, 0), r_msg, border_radius=5)
+            t_msg = self.fonte_media.render(self.msg_evento, True, (255, 255, 100))
+            self.tela.blit(t_msg, (30, y_cursor + 5))
+            self.timer_evento -= 1
+
+        y_grafico = y_cursor + 40
+        altura_disp = self.altura_tela - y_grafico - 10
+        if self.dados_para_grafico_atualizados or self.img_grafico_cache is None:
+            self._gerar_grafico_matplotlib(3.8, altura_disp / 80)
+            self.dados_para_grafico_atualizados = False
+        if self.img_grafico_cache:
+            self.tela.blit(self.img_grafico_cache, (10, y_grafico))
+
+    def _gerar_grafico_matplotlib(self, w_inch, h_inch):
+        if len(self.jogadores[1]['dados']) < 1: return
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(w_inch + 1, h_inch))
+        fig.patch.set_facecolor('#232337')
         
-        # Gráfico 1: Distribuições comparadas
-        for jogador_id in [1, 2]:
-            dados = self.jogadores[jogador_id]['dados']
-            if len(dados) > 0:
-                valores, counts = np.unique(dados, return_counts=True)
-                prob_empirica = counts / len(dados)
-                cor = self.jogadores[jogador_id]['cor']
-                ax1.bar(valores + (jogador_id-1.5)*0.3, prob_empirica, 0.3, 
-                       alpha=0.7, label=f'{self.jogadores[jogador_id]["nome"]}', 
-                       color=np.array(cor)/255)
+        for pid in [1, 2]:
+            dados = self.jogadores[pid]['dados']
+            if dados:
+                vals, counts = np.unique(dados, return_counts=True)
+                freq = counts / len(dados)
+                cor = np.array(self.jogadores[pid]['cor']) / 255
+                offset = -0.15 if pid == 1 else 0.15
+                ax1.bar(vals + offset, freq, width=0.3, color=cor, alpha=0.7, label=f"J{pid}")
+
+        x_teo = np.arange(2, 13)
+        prob_teo = [1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1]
+        prob_teo = [p/36 for p in prob_teo]
+        ax1.plot(x_teo, prob_teo, 'w--', linewidth=1, alpha=0.5, label="Teórico")
         
-        # Distribuição teórica
-        teorica_dict = self.calcular_distribuicao_teorica()
-        valores_teoricos = list(teorica_dict.keys())
-        prob_teorica = [teorica_dict[v] for v in valores_teoricos]
-        ax1.plot(valores_teoricos, prob_teorica, 'w--', alpha=0.5, label='Teórica')
+        ax1.set_title("Frequência", color='white', fontsize=10)
+        # --- NOMES DOS EIXOS (GRÁFICO 1) ---
+        ax1.set_xlabel('Soma', color='white', fontsize=8)
+        ax1.set_ylabel('Prob', color='white', fontsize=8)
         
-        ax1.set_title('Distribuições Comparadas', color='white', fontsize=12)
-        ax1.set_xlabel('Soma dos Dados', color='white')
-        ax1.set_ylabel('Probabilidade', color='white')
-        ax1.legend(facecolor='#2A2A4A', labelcolor='white', fontsize=8)
-        ax1.grid(True, alpha=0.3)
-        ax1.set_facecolor('#2A2A4A')
+        ax1.tick_params(colors='white', labelsize=8)
+        ax1.set_facecolor('#232337')
         
-        # Gráfico 2: Convergência das médias
-        for jogador_id in [1, 2]:
-            if self.historico_medias[jogador_id]:
-                cor = self.jogadores[jogador_id]['cor']
-                ax2.plot(self.historico_medias[jogador_id], 
-                        color=np.array(cor)/255, 
-                        linewidth=2,
-                        label=f'{self.jogadores[jogador_id]["nome"]}')
+        for pid in [1, 2]:
+            medias = self.historico_medias[pid]
+            if medias:
+                cor = np.array(self.jogadores[pid]['cor']) / 255
+                ax2.plot(medias, color=cor, linewidth=1.5)
         
-        ax2.axhline(y=7, color='white', linestyle='--', alpha=0.5, label='Média Teórica')
-        ax2.set_title('Convergência das Médias', color='white', fontsize=12)
-        ax2.set_xlabel('Número de Lançamentos', color='white')
-        ax2.set_ylabel('Média', color='white')
-        ax2.legend(facecolor='#2A2A4A', labelcolor='white', fontsize=8)
-        ax2.grid(True, alpha=0.3)
-        ax2.set_facecolor('#2A2A4A')
+        ax2.axhline(7, color='white', linestyle='--', alpha=0.5)
+        ax2.set_title("Conv. Média", color='white', fontsize=10)
+        # --- NOMES DOS EIXOS (GRÁFICO 2) ---
+        ax2.set_xlabel('Lançamentos', color='white', fontsize=8)
+        ax2.set_ylabel('Média', color='white', fontsize=8)
         
-        # Configurar cores dos eixos
+        ax2.tick_params(colors='white', labelsize=8)
+        ax2.set_facecolor('#232337')
+
         for ax in [ax1, ax2]:
-            ax.tick_params(colors='white')
             for spine in ax.spines.values():
                 spine.set_color('white')
-        
+            ax.grid(True, alpha=0.1)
         plt.tight_layout()
         
-        # Converter para imagem pygame
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', facecolor=fig.get_facecolor(), 
-                   bbox_inches='tight', dpi=80)
+        plt.savefig(buf, format='png', facecolor='#232337')
         buf.seek(0)
-        image_surface = pygame.image.load(buf)
-        buf.close()
         plt.close(fig)
-        
-        return image_surface
-
-    def desenhar_interface_principal(self):
-        """Desenha a interface principal do jogo"""
-        # Área principal (lado esquerdo) - mesma cor do fundo
-        area_principal = pygame.Rect(0, 0, self.largura * 0.6, self.altura)
-        pygame.draw.rect(self.tela, self.cor_area_principal, area_principal)
-        
-        # Borda sutil entre as áreas
-        pygame.draw.line(self.tela, (80, 80, 120), 
-                        (self.largura * 0.6, 0), (self.largura * 0.6, self.altura), 2)
-        
-        # Título principal
-        titulo = self.fonte_titulo.render("DUELO ESTATÍSTICO - CORRIDA DOS PEÕES", True, (255, 255, 0))
-        self.tela.blit(titulo, (50, 30))
-        
-        # Botão de lançar dados
-        cor_botao_jogar = self.cor_botao_hover if self.botao_jogar_hover else self.cor_botao
-        pygame.draw.rect(self.tela, cor_botao_jogar, (50, 100, 400, 70), border_radius=15)
-        pygame.draw.rect(self.tela, (255, 255, 255), (50, 100, 400, 70), 2, border_radius=15)
-        
-        texto_botao = "JOGAR DADOS" if not self.vencedor else "JOGO FINALIZADO"
-        texto_lancar = self.fonte_titulo.render(texto_botao, True, self.cor_texto)
-        self.tela.blit(texto_lancar, (80, 120))
-        
-        # Botão de reiniciar (ao lado do botão de jogar)
-        cor_botao_reiniciar = self.cor_botao_reiniciar_hover if self.botao_reiniciar_hover else self.cor_botao_reiniciar
-        pygame.draw.rect(self.tela, cor_botao_reiniciar, (470, 100, 200, 70), border_radius=15)
-        pygame.draw.rect(self.tela, (255, 255, 255), (470, 100, 200, 70), 2, border_radius=15)
-        
-        texto_reiniciar = self.fonte_titulo.render("REINICIAR", True, self.cor_texto)
-        self.tela.blit(texto_reiniciar, (500, 120))
-        
-        # Informações do turno
-        if not self.vencedor:
-            jogador_atual = self.jogadores[self.jogador_atual]
-            texto_turno = self.fonte.render(
-                f"Vez do: {jogador_atual['nome']}", True, jogador_atual['cor']
-            )
-            self.tela.blit(texto_turno, (50, 190))
-        
-        # Instruções
-        instrucoes = [
-            "REGRAS DA CORRIDA:",
-            "- Cada jogador lança 2 dados por vez",
-            "- Avança casas = resultado dos dados (máx 5 por turno)",
-            "- Casas verdes: SORTE (avançar casas extras)",
-            "- Casas vermelhas: AZAR (voltar casas)",
-            "- Primeiro a chegar na casa 30 vence!",
-            "- Estatísticas são calculadas em tempo real",
-            "- Observe a convergência para a média teórica (7)",
-            "",
-            "CONTROLES:",
-            "- CLIQUE no botão ou ESPAÇO para jogar",
-            "- CLIQUE em REINICIAR ou R para novo jogo",
-            "- ESC para sair"
-        ]
-        
-        instrucoes_y = 250
-        for instrucao in instrucoes:
-            cor = (255, 255, 0) if "REGRAS" in instrucao or "CONTROLES" in instrucao else self.cor_texto
-            fonte = self.fonte if "REGRAS" in instrucao or "CONTROLES" in instrucao else self.fonte_pequena
-            texto = fonte.render(instrucao, True, cor)
-            self.tela.blit(texto, (50, instrucoes_y))
-            instrucoes_y += 25 if "REGRAS" in instrucao or "CONTROLES" in instrucao else 20
+        self.img_grafico_cache = pygame.image.load(buf)
 
     def rodar(self):
-        """Loop principal do jogo"""
-        executando = True
         clock = pygame.time.Clock()
-        
-        print("Corrida Estatistica iniciada!")
-        print("Dois peoes disputam quem chega primeiro a casa 30")
-        print("Novo: Casas de SORTE (verde) e AZAR (vermelho) adicionadas!")
-        print("Estatisticas sao calculadas em tempo real para cada jogador")
-        
-        while executando:
-            mouse_pos = pygame.mouse.get_pos()
-            
-            # Verificar hover nos botões
-            botao_jogar_rect = pygame.Rect(50, 100, 400, 70)
-            botao_reiniciar_rect = pygame.Rect(470, 100, 200, 70)
-            
-            self.botao_jogar_hover = botao_jogar_rect.collidepoint(mouse_pos) and not self.vencedor
-            self.botao_reiniciar_hover = botao_reiniciar_rect.collidepoint(mouse_pos)
-            
-            for evento in pygame.event.get():
-                if evento.type == pygame.QUIT:
-                    executando = False
-                elif evento.type == pygame.MOUSEBUTTONDOWN:
-                    if self.botao_jogar_hover and not self.vencedor:
-                        resultado = self.lancar_dados_jogador(self.jogador_atual)
-                        if resultado:
-                            print(f"Dados: {self.jogadores[self.jogador_atual]['nome']}: {resultado} pontos")
-                            self.alternar_jogador()
-                    elif self.botao_reiniciar_hover:
-                        self.reiniciar_jogo()
-                elif evento.type == pygame.KEYDOWN:
-                    if evento.key == pygame.K_SPACE and not self.vencedor:
-                        resultado = self.lancar_dados_jogador(self.jogador_atual)
-                        if resultado:
-                            print(f"Dados: {self.jogadores[self.jogador_atual]['nome']}: {resultado} pontos")
-                            self.alternar_jogador()
-                    elif evento.key == pygame.K_r:
-                        self.reiniciar_jogo()
-                    elif evento.key == pygame.K_ESCAPE:
-                        executando = False
-            
-            # Limpar tela com cor uniforme
-            self.tela.fill(self.cor_fundo)
-            
-            # Desenhar interface
-            self.desenhar_interface_principal()
-            self.desenhar_tabuleiro_corrida()
-            self.desenhar_mensagem_evento()
-            self.desenhar_mensagem_vencedor()
-            self.desenhar_estatisticas_jogadores()
-            
-            # Desenhar gráficos comparativos
-            try:
-                grafico = self.criar_grafico_comparacao()
-                if grafico:
-                    self.tela.blit(grafico, (50, 450))
-            except Exception as e:
-                # Fallback simples se der erro no gráfico
-                texto_erro = self.fonte_pequena.render("Gráfico disponível após alguns lançamentos", True, self.cor_texto)
-                self.tela.blit(texto_erro, (50, 450))
+        rodando = True
+        while rodando:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT: rodando = False
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE: self.jogar_dados()
+                    if event.key == pygame.K_r: self.reiniciar()
+                    if event.key == pygame.K_ESCAPE: rodando = False
+
+            self.tela.fill(self.C_FUNDO)
+            self._desenhar_painel_esquerdo()
+            self._desenhar_tabuleiro()
+            self._desenhar_peoes()
             
             pygame.display.flip()
-            clock.tick(60)
-        
+            clock.tick(30)
         pygame.quit()
+        sys.exit()
 
-# Executar o jogo
 if __name__ == "__main__":
-    try:
-        jogo = CorridaEstatistica()
-        jogo.rodar()
-    except Exception as e:
-        print(f"Erro: {e}")
-        import traceback
-        traceback.print_exc()
-        input("Pressione Enter para sair...")
+    CorridaEstatistica().rodar()
