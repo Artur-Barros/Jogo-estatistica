@@ -16,7 +16,7 @@ class CorridaEstatistica:
         # --- CONFIGURAÇÕES DE TELA ---
         self.largura_tela, self.altura_tela = 1150, 720
         self.tela = pygame.display.set_mode((self.largura_tela, self.altura_tela), pygame.RESIZABLE)
-        pygame.display.set_caption("Corrida Estatística - Gráficos com Eixos Nomeados")
+        pygame.display.set_caption("Corrida Estatística - Análise de Probabilidade em Tempo Real")
         
         # Cores atualizadas - tema mais moderno
         self.C_FUNDO = (20, 25, 35)
@@ -48,6 +48,7 @@ class CorridaEstatistica:
         self.turno_atual = 1
         self.vencedor = None
         self.historico_medias = {1: [], 2: []}
+        self.historico_lancamentos = {1: [], 2: []}
         
         # Estados de exibição
         self.msg_evento = ""
@@ -69,7 +70,7 @@ class CorridaEstatistica:
         ]
         
         # Estados do jogo
-        self.estado = "menu"  # "menu", "selecao_poder", "jogando", "fim"
+        self.estado = "menu"
         self.jogador_selecionando_poder = 1
 
         # Casas Especiais
@@ -88,7 +89,7 @@ class CorridaEstatistica:
         self._gerar_layout_tabuleiro()
 
     def _gerar_layout_tabuleiro(self):
-        """Gera o layout Zig-Zag ajustado (Deslocado para a direita)"""
+        """Gera o layout Zig-Zag ajustado"""
         self.rects_casas = []
         
         painel_w = 380
@@ -135,21 +136,19 @@ class CorridaEstatistica:
         self.turno_atual = 1
         self.vencedor = None
         self.historico_medias = {1: [], 2: []}
+        self.historico_lancamentos = {1: [], 2: []}
         self.msg_evento = ""
         self.ultimo_lancamento = (0, 0)
         self.img_grafico_cache = None
         self.estado = "menu"
         self.jogador_selecionando_poder = 1
-        print("Jogo Reiniciado")
 
     def selecionar_poder(self, jogador_id, poder_index):
         """Atribui um poder ao jogador"""
         if 0 <= poder_index < len(self.poderes_disponiveis):
             self.jogadores[jogador_id]['poder'] = self.poderes_disponiveis[poder_index]
             self.jogadores[jogador_id]['poder_usado'] = False
-            print(f"{self.jogadores[jogador_id]['nome']} escolheu: {self.poderes_disponiveis[poder_index]['nome']}")
             
-            # Avança para o próximo jogador ou inicia o jogo
             if jogador_id == 1:
                 self.jogador_selecionando_poder = 2
             else:
@@ -158,7 +157,7 @@ class CorridaEstatistica:
     def usar_poder(self, jogador_id):
         """Ativa o poder do jogador atual"""
         jogador = self.jogadores[jogador_id]
-        oponente_id = 3 - jogador_id  # 1->2 ou 2->1
+        oponente_id = 3 - jogador_id
         
         if jogador['poder'] is None or jogador['poder_usado']:
             return False
@@ -167,9 +166,7 @@ class CorridaEstatistica:
         jogador['poder_usado'] = True
         
         if poder_nome == "Dobrar Dados":
-            # O próximo lançamento será dobrado
             self.msg_evento = f"{jogador['nome']} usou {poder_nome}!"
-            # Esta lógica será aplicada no próximo lançamento
             self.poder_dobrar_ativa = True
             
         elif poder_nome == "Retroceder Oponente":
@@ -184,7 +181,6 @@ class CorridaEstatistica:
             
         elif poder_nome == "Jogar Novamente":
             self.msg_evento = f"{jogador['nome']} usou {poder_nome}!"
-            # Não muda o turno após este lançamento
             self.turno_extra = True
             
         self.timer_evento = 120
@@ -204,46 +200,60 @@ class CorridaEstatistica:
         if hasattr(self, 'poder_dobrar_ativa') and self.poder_dobrar_ativa:
             soma = soma * 2
             self.poder_dobrar_ativa = False
+            self.msg_evento = f"Dados dobrados! Movimento: {soma} casas"
+        else:
+            self.msg_evento = f"Movimento: {soma} casas"
+            
+        self.timer_evento = 90
             
         self.ultimo_lancamento = (d1, d2)
         self.ultimo_resultado_soma = soma
         self.timer_dados_visiveis = 90
         
+        # Armazenar dados para estatísticas
         jog['dados'].append(soma)
+        self.historico_lancamentos[self.turno_atual].append((d1, d2))
         self.historico_medias[self.turno_atual].append(np.mean(jog['dados']))
         self.dados_para_grafico_atualizados = True
         
+        # MOVIMENTO CORRETO: usar o valor real da soma
         movimento = soma
         pos_antiga = jog['pos']
         jog['pos'] += movimento
         
-        self._verificar_consequencias(jog['pos'])
+        # Verificar casas especiais apenas na posição final (evita recursão)
+        self._verificar_consequencias_final(jog['pos'])
         
+        # Verificar vitória
         if jog['pos'] >= self.meta - 1:
             jog['pos'] = self.meta - 1
             self.vencedor = self.turno_atual
             self.msg_evento = f"{jog['nome']} VENCEU!"
             self.estado = "fim"
         
-        # Verificar se há turno extra (poder Jogar Novamente)
+        # Mudar turno (a menos que haja turno extra)
         if not self.vencedor and not hasattr(self, 'turno_extra'):
             self.turno_atual = 3 - self.turno_atual
         elif hasattr(self, 'turno_extra'):
             del self.turno_extra
 
-    def _verificar_consequencias(self, fim):
-        idx = min(fim, self.meta - 1)
-        if idx in self.casas_especiais:
-            tipo, valor, texto = self.casas_especiais[idx]
+    def _verificar_consequencias_final(self, posicao):
+        """Verifica consequências apenas na posição final (evita recursão infinita)"""
+        if posicao >= self.meta:
+            return
+            
+        if posicao in self.casas_especiais:
+            tipo, valor, texto = self.casas_especiais[posicao]
             jog = self.jogadores[self.turno_atual]
-            self.msg_evento = texto
+            
+            self.msg_evento = f"{texto} na casa {posicao + 1}"
             self.timer_evento = 120
+            
             if tipo == "SORTE":
                 jog['pos'] += valor
                 self.msg_evento += f" (+{valor})"
             elif tipo == "AZAR":
-                jog['pos'] -= valor
-                if jog['pos'] < 0: jog['pos'] = 0
+                jog['pos'] = max(0, jog['pos'] - valor)
                 self.msg_evento += f" (-{valor})"
 
     def _calcular_stats_texto(self, jogador_id):
@@ -257,12 +267,9 @@ class CorridaEstatistica:
         moda = valores[indice_moda]
         return f"{media:.2f}", f"{mediana:.1f}", f"{moda}"
 
-    # --- DESENHAR DADO COM PONTOS ---
     def _desenhar_dado_pontos(self, x, y, tamanho, valor):
         rect = pygame.Rect(x, y, tamanho, tamanho)
-        # Sombra
         pygame.draw.rect(self.tela, (10, 10, 10), (x+2, y+2, tamanho, tamanho), border_radius=8)
-        # Dado
         pygame.draw.rect(self.tela, (245, 245, 245), rect, border_radius=8)
         pygame.draw.rect(self.tela, (20, 20, 20), rect, 2, border_radius=8)
         
@@ -289,7 +296,6 @@ class CorridaEstatistica:
             pygame.draw.circle(self.tela, cor_ponto, (int(px), int(py)), raio)
 
     def _desenhar_tabuleiro(self):
-        # Desenhar caminho do tabuleiro
         if len(self.rects_casas) > 1:
             pontos = [c['center'] for c in self.rects_casas]
             pygame.draw.lines(self.tela, (80, 80, 100), False, pontos, 8)
@@ -301,7 +307,6 @@ class CorridaEstatistica:
             borda = self.C_BORDA
             largura_borda = 2
             
-            # Sombra
             shadow_rect = pygame.Rect(rect.x + 2, rect.y + 2, rect.width, rect.height)
             pygame.draw.rect(self.tela, (10, 10, 10), shadow_rect, border_radius=8)
             
@@ -336,13 +341,10 @@ class CorridaEstatistica:
             cx += -12 if pid == 1 else 12
             cy += 8
             
-            # Sombra do peão
             pygame.draw.circle(self.tela, (0,0,0), (cx+2, cy+2), 14)
-            # Peão
             pygame.draw.circle(self.tela, dados['cor'], (cx, cy), 12)
             pygame.draw.circle(self.tela, (255,255,255), (cx, cy), 12, 2)
             
-            # Destacar jogador atual
             if pid == self.turno_atual and not self.vencedor and self.estado == "jogando":
                 pygame.draw.circle(self.tela, self.C_DESTAQUE, (cx, cy), 16, 3)
 
@@ -350,11 +352,9 @@ class CorridaEstatistica:
         mouse = pygame.mouse.get_pos()
         cor = cor_hover if rect.collidepoint(mouse) else cor_normal
         
-        # Sombra do botão
         shadow_rect = pygame.Rect(rect.x + 3, rect.y + 3, rect.width, rect.height)
         pygame.draw.rect(self.tela, (10, 10, 10), shadow_rect, border_radius=8)
         
-        # Botão
         pygame.draw.rect(self.tela, cor, rect, border_radius=8)
         pygame.draw.rect(self.tela, (240, 240, 240), rect, 2, border_radius=8)
         
@@ -364,40 +364,35 @@ class CorridaEstatistica:
         return rect.collidepoint(mouse) and pygame.mouse.get_pressed()[0]
 
     def _desenhar_menu(self):
-        """Tela de menu principal"""
         self.tela.fill(self.C_FUNDO)
         
-        # Título
         titulo = self.fonte_grande.render("CORRIDA ESTATÍSTICA", True, self.C_DESTAQUE)
-        subtitulo = self.fonte_media.render("Um jogo de dados e estratégia", True, self.C_TEXTO)
+        subtitulo = self.fonte_media.render("Análise de Probabilidade em Tempo Real", True, self.C_TEXTO)
         
         self.tela.blit(titulo, (self.largura_tela//2 - titulo.get_width()//2, 120))
         self.tela.blit(subtitulo, (self.largura_tela//2 - subtitulo.get_width()//2, 170))
         
-        # Botões do menu
         btn_largura, btn_altura = 300, 60
         btn_x = self.largura_tela//2 - btn_largura//2
         
-        # Botão Iniciar
         btn_iniciar = pygame.Rect(btn_x, 280, btn_largura, btn_altura)
         if self._desenhar_botao(btn_iniciar, "INICIAR JOGO", self.C_BOTAO, self.C_BOTAO_HOVER, self.fonte_media):
             self.estado = "selecao_poder"
             self.jogador_selecionando_poder = 1
             pygame.time.delay(300)
         
-        # Botão Sair
         btn_sair = pygame.Rect(btn_x, 360, btn_largura, btn_altura)
         if self._desenhar_botao(btn_sair, "SAIR", (160, 60, 60), (180, 80, 80), self.fonte_media):
             pygame.quit()
             sys.exit()
         
-        # Instruções
         instrucoes = [
             "• Cada jogador escolhe um poder no início",
             "• Use poderes estrategicamente durante o jogo",
             "• Lance os dados e avance no tabuleiro",
             "• Cuidado com as casas de azar!",
-            "• Primeiro a chegar na META vence!"
+            "• Primeiro a chegar na META vence!",
+            "• Gráficos mostram distribuições em tempo real"
         ]
         
         for i, texto in enumerate(instrucoes):
@@ -405,20 +400,16 @@ class CorridaEstatistica:
             self.tela.blit(linha, (self.largura_tela//2 - linha.get_width()//2, 460 + i * 30))
 
     def _desenhar_selecao_poder(self):
-        """Tela de seleção de poderes"""
         self.tela.fill(self.C_FUNDO)
         
-        # Título
         titulo = self.fonte_grande.render(f"{self.jogadores[self.jogador_selecionando_poder]['nome']} - Escolha seu Poder", 
                                          True, self.jogadores[self.jogador_selecionando_poder]['cor'])
         self.tela.blit(titulo, (self.largura_tela//2 - titulo.get_width()//2, 30))
         
-        # Instrução
         instrucao = self.fonte_media.render("Cada jogador pode usar seu poder UMA VEZ durante o jogo", 
                                            True, self.C_DESTAQUE)
         self.tela.blit(instrucao, (self.largura_tela//2 - instrucao.get_width()//2, 80))
         
-        # Desenhar opções de poderes
         poder_largura = 250
         poder_altura = 120
         espacamento = 30
@@ -435,31 +426,25 @@ class CorridaEstatistica:
             
             rect = pygame.Rect(x, y, poder_largura, poder_altura)
             
-            # Sombra
             shadow_rect = pygame.Rect(x + 4, y + 4, poder_largura, poder_altura)
             pygame.draw.rect(self.tela, (10, 10, 10), shadow_rect, border_radius=12)
             
-            # Fundo do poder
             pygame.draw.rect(self.tela, poder['cor'], rect, border_radius=12)
             pygame.draw.rect(self.tela, (240, 240, 240), rect, 2, border_radius=12)
             
-            # Nome do poder
             nome_texto = self.fonte_media.render(poder['nome'], True, (255, 255, 255))
             self.tela.blit(nome_texto, (rect.centerx - nome_texto.get_width()//2, y + 15))
             
-            # Descrição
             desc_texto = self.fonte_pequena.render(poder['descricao'], True, (240, 240, 240))
             self.tela.blit(desc_texto, (rect.centerx - desc_texto.get_width()//2, y + 55))
             
-            # Verificar clique
             mouse_pos = pygame.mouse.get_pos()
             if rect.collidepoint(mouse_pos) and pygame.mouse.get_pressed()[0]:
                 self.selecionar_poder(self.jogador_selecionando_poder, i)
-                pygame.time.delay(300)  # Pequeno delay para evitar múltiplos cliques
+                pygame.time.delay(300)
 
     def _desenhar_painel_esquerdo(self):
         w_painel = 380
-        # Fundo do painel com gradiente simples
         for i in range(w_painel):
             alpha = i / w_painel
             cor = (
@@ -469,17 +454,12 @@ class CorridaEstatistica:
             )
             pygame.draw.line(self.tela, cor, (i, 0), (i, self.altura_tela))
         
-        # REMOVIDA: Linha amarela que dividia o tabuleiro
-        # pygame.draw.line(self.tela, self.C_DESTAQUE, (w_painel, 0), (w_painel, self.altura_tela), 3)
-        
         y_cursor = 15
         
-        # Título
-        titulo = self.fonte_grande.render("CORRIDA ESTATÍSTICA", True, self.C_DESTAQUE)
+        titulo = self.fonte_grande.render("ANÁLISE ESTATÍSTICA", True, self.C_DESTAQUE)
         self.tela.blit(titulo, (20, y_cursor))
         y_cursor += 50
         
-        # Botões de ação
         btn_jogar = pygame.Rect(20, y_cursor, 160, 45)
         if self._desenhar_botao(btn_jogar, "JOGAR (Espaço)", 
                                self.C_BOTAO, self.C_BOTAO_HOVER, self.fonte_media):
@@ -494,7 +474,6 @@ class CorridaEstatistica:
 
         y_cursor += 60
         
-        # Informação do turno
         if self.estado == "jogando" and not self.vencedor:
             nome = self.jogadores[self.turno_atual]['nome']
             cor = self.jogadores[self.turno_atual]['cor']
@@ -504,7 +483,6 @@ class CorridaEstatistica:
             txt_venc = self.fonte_grande.render("JOGO ENCERRADO", True, self.C_DESTAQUE)
             self.tela.blit(txt_venc, (20, y_cursor))
 
-        # --- EXIBIÇÃO DOS DADOS ---
         y_cursor += 40
         if self.timer_dados_visiveis > 0:
             d1, d2 = self.ultimo_lancamento
@@ -518,7 +496,6 @@ class CorridaEstatistica:
 
         y_cursor += 60
         
-        # Botão de usar poder
         if self.estado == "jogando" and not self.vencedor:
             jogador = self.jogadores[self.turno_atual]
             if jogador['poder'] and not jogador['poder_usado']:
@@ -528,7 +505,6 @@ class CorridaEstatistica:
                     self.usar_poder(self.turno_atual)
                 y_cursor += 50
 
-        # Informações dos jogadores
         y_cursor += 20
         pygame.draw.line(self.tela, (100,100,100), (20, y_cursor), (360, y_cursor), 1)
         y_cursor += 10
@@ -549,7 +525,6 @@ class CorridaEstatistica:
                 t_val = self.fonte_pequena.render(val, True, (255,255,255))
                 self.tela.blit(t_val, (col_x[i+1], y_cursor))
             
-            # Mostrar poder do jogador
             if self.jogadores[pid]['poder']:
                 status = "✓" if self.jogadores[pid]['poder_usado'] else "●"
                 cor_status = (150,150,150) if self.jogadores[pid]['poder_usado'] else self.jogadores[pid]['poder']['cor']
@@ -560,26 +535,22 @@ class CorridaEstatistica:
 
         y_cursor += 10
         
-        # Mensagem de evento - CORRIGIDA: Ajustada para caber na caixa
         if self.timer_evento > 0:
-            r_msg = pygame.Rect(20, y_cursor, 340, 40)  # Altura aumentada para 40
+            r_msg = pygame.Rect(20, y_cursor, 340, 40)
             pygame.draw.rect(self.tela, (40, 40, 20), r_msg, border_radius=5)
             pygame.draw.rect(self.tela, (255, 255, 100), r_msg, 1, border_radius=5)
             
-            # Quebrar texto se for muito longo
             if len(self.msg_evento) > 25:
                 t_msg = self.fonte_pequena.render(self.msg_evento, True, (255, 255, 100))
             else:
                 t_msg = self.fonte_media.render(self.msg_evento, True, (255, 255, 100))
                 
-            # Centralizar o texto na caixa
             text_rect = t_msg.get_rect(center=r_msg.center)
             self.tela.blit(t_msg, text_rect)
             
             self.timer_evento -= 1
             y_cursor += 50
 
-        # Gráficos
         y_grafico = y_cursor + 20
         altura_disp = self.altura_tela - y_grafico - 10
         if self.dados_para_grafico_atualizados or self.img_grafico_cache is None:
@@ -589,64 +560,93 @@ class CorridaEstatistica:
             self.tela.blit(self.img_grafico_cache, (10, y_grafico))
 
     def _gerar_grafico_matplotlib(self, w_inch, h_inch):
-        if len(self.jogadores[1]['dados']) < 1 and len(self.jogadores[2]['dados']) < 1:
+        """Gera gráficos estatísticos precisos em tempo real"""
+        todos_dados = []
+        for pid in [1, 2]:
+            todos_dados.extend(self.jogadores[pid]['dados'])
+        
+        if len(todos_dados) < 1:
             return
             
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(w_inch + 1, h_inch))
         fig.patch.set_facecolor('#141923')
         
-        # Gráfico de frequência
-        for pid in [1, 2]:
-            dados = self.jogadores[pid]['dados']
-            if dados:
-                vals, counts = np.unique(dados, return_counts=True)
-                freq = counts / len(dados)
-                cor = np.array(self.jogadores[pid]['cor']) / 255
-                offset = -0.15 if pid == 1 else 0.15
-                ax1.bar(vals + offset, freq, width=0.3, color=cor, alpha=0.8, label=f"J{pid}")
+        # Gráfico 1: Distribuição de frequência CORRETA
+        if todos_dados:
+            # Calcular distribuição empírica correta
+            valores_possiveis = range(2, 13)
+            freq_empirica = []
+            
+            for valor in valores_possiveis:
+                freq = todos_dados.count(valor) / len(todos_dados)
+                freq_empirica.append(freq)
+            
+            # Plot para cada jogador
+            for pid in [1, 2]:
+                dados_jogador = self.jogadores[pid]['dados']
+                if len(dados_jogador) > 0:
+                    freq_jogador = []
+                    for valor in valores_possiveis:
+                        freq = dados_jogador.count(valor) / len(dados_jogador)
+                        freq_jogador.append(freq)
+                    
+                    cor = np.array(self.jogadores[pid]['cor']) / 255
+                    ax1.bar(np.array(valores_possiveis) - 0.2 + (pid-1)*0.4, freq_jogador, 
+                           width=0.35, color=cor, alpha=0.7, label=f"J{pid}")
 
-        x_teo = np.arange(2, 13)
-        prob_teo = [1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1]
-        prob_teo = [p/36 for p in prob_teo]
-        ax1.plot(x_teo, prob_teo, 'w--', linewidth=1, alpha=0.5, label="Teórico")
-        
-        ax1.set_title("Frequência dos Dados", color='white', fontsize=10)
-        ax1.set_xlabel('Soma dos Dados', color='white', fontsize=8)
-        ax1.set_ylabel('Probabilidade', color='white', fontsize=8)
-        ax1.legend(fontsize=7, facecolor='#232337')
-        
-        ax1.tick_params(colors='white', labelsize=8)
-        ax1.set_facecolor('#232337')
-        
-        # Gráfico de convergência da média
+            # Distribuição teórica CORRETA para dois dados
+            prob_teo = [1/36, 2/36, 3/36, 4/36, 5/36, 6/36, 5/36, 4/36, 3/36, 2/36, 1/36]
+            
+            ax1.plot(valores_possiveis, prob_teo, 'w-', linewidth=2, alpha=0.8, label="Teórico")
+            ax1.fill_between(valores_possiveis, prob_teo, alpha=0.2, color='white')
+            
+            ax1.set_title("Distribuição de Probabilidade", color='white', fontsize=10, pad=10)
+            ax1.set_xlabel('Soma dos Dados', color='white', fontsize=9)
+            ax1.set_ylabel('Frequência Relativa', color='white', fontsize=9)
+            ax1.legend(fontsize=7, facecolor='#232337', loc='upper right')
+            ax1.set_xticks(range(2, 13))
+            ax1.grid(True, alpha=0.3, color='gray')
+            
+            ax1.tick_params(colors='white', labelsize=8)
+            ax1.set_facecolor('#232337')
+
+        # Gráfico 2: Convergência da média CORRETA
+        ax2.clear()
         for pid in [1, 2]:
             medias = self.historico_medias[pid]
-            if medias:
+            if len(medias) > 0:
                 cor = np.array(self.jogadores[pid]['cor']) / 255
-                ax2.plot(range(1, len(medias)+1), medias, color=cor, linewidth=2, label=f"J{pid}")
+                ax2.plot(range(1, len(medias)+1), medias, 
+                        color=cor, linewidth=2, label=f"J{pid}")
         
-        ax2.axhline(7, color='white', linestyle='--', alpha=0.5, label="Média Esperada")
-        ax2.set_title("Convergência da Média", color='white', fontsize=10)
-        ax2.set_xlabel('Número de Lançamentos', color='white', fontsize=8)
-        ax2.set_ylabel('Média', color='white', fontsize=8)
+        # Linha da média teórica
+        ax2.axhline(7, color='white', linestyle='--', linewidth=2, alpha=0.7, 
+                   label="Média Teórica = 7.0")
+        
+        ax2.set_title("Lei dos Grandes Números", color='white', fontsize=10, pad=10)
+        ax2.set_xlabel('Número de Lançamentos', color='white', fontsize=9)
+        ax2.set_ylabel('Média Acumulada', color='white', fontsize=9)
         ax2.legend(fontsize=7, facecolor='#232337')
+        ax2.grid(True, alpha=0.3, color='gray')
         
         ax2.tick_params(colors='white', labelsize=8)
         ax2.set_facecolor('#232337')
 
-        # Estilizar os gráficos
+        # Estilização consistente
         for ax in [ax1, ax2]:
             for spine in ax.spines.values():
                 spine.set_color('white')
-            ax.grid(True, alpha=0.2, color='white')
             
-        plt.tight_layout()
+        plt.tight_layout(pad=2.0)
         
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', facecolor='#141923', dpi=100)
+        plt.savefig(buf, format='png', facecolor='#141923', dpi=100, 
+                   bbox_inches='tight', pad_inches=0.1)
         buf.seek(0)
         plt.close(fig)
+        
         self.img_grafico_cache = pygame.image.load(buf)
+        buf.close()
 
     def rodar(self):
         clock = pygame.time.Clock()
@@ -675,7 +675,7 @@ class CorridaEstatistica:
                 self._desenhar_peoes()
             
             pygame.display.flip()
-            clock.tick(60)  # Aumentado para 60 FPS para mais suavidade
+            clock.tick(60)
         pygame.quit()
         sys.exit()
 
