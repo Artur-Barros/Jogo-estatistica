@@ -249,7 +249,7 @@ class CorridaEstatistica:
     def _calcular_stats_texto(self, jogador_id):
         dados = self.jogadores[jogador_id]['dados']
         if not dados:
-            return "Sem dados", "Sem dados", "Sem dados"
+            return "-", "-", "-"
         media = np.mean(dados)
         mediana = np.median(dados)
         valores, contagens = np.unique(dados, return_counts=True)
