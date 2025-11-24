@@ -213,7 +213,7 @@ class CorridaEstatistica:
         self.historico_medias[self.turno_atual].append(np.mean(jog['dados']))
         self.dados_para_grafico_atualizados = True
         
-        movimento = min(soma, 5)
+        movimento = soma
         pos_antiga = jog['pos']
         jog['pos'] += movimento
         
