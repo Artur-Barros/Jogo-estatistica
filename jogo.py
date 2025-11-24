@@ -366,26 +366,37 @@ class CorridaEstatistica:
     def _desenhar_menu(self):
         self.tela.fill(self.C_FUNDO)
         
+        # Título - CENTRALIZADO DINAMICAMENTE
         titulo = self.fonte_grande.render("CORRIDA ESTATÍSTICA", True, self.C_DESTAQUE)
         subtitulo = self.fonte_media.render("Análise de Probabilidade em Tempo Real", True, self.C_TEXTO)
         
-        self.tela.blit(titulo, (self.largura_tela//2 - titulo.get_width()//2, 120))
-        self.tela.blit(subtitulo, (self.largura_tela//2 - subtitulo.get_width()//2, 170))
+        # Centralizar verticalmente
+        titulo_y = self.altura_tela * 0.2
+        subtitulo_y = titulo_y + 50
         
+        self.tela.blit(titulo, (self.largura_tela//2 - titulo.get_width()//2, titulo_y))
+        self.tela.blit(subtitulo, (self.largura_tela//2 - subtitulo.get_width()//2, subtitulo_y))
+        
+        # Botões do menu - CENTRALIZADOS DINAMICAMENTE
         btn_largura, btn_altura = 300, 60
         btn_x = self.largura_tela//2 - btn_largura//2
+        btn_iniciar_y = self.altura_tela * 0.4
+        btn_sair_y = btn_iniciar_y + 80
         
-        btn_iniciar = pygame.Rect(btn_x, 280, btn_largura, btn_altura)
+        # Botão Iniciar
+        btn_iniciar = pygame.Rect(btn_x, btn_iniciar_y, btn_largura, btn_altura)
         if self._desenhar_botao(btn_iniciar, "INICIAR JOGO", self.C_BOTAO, self.C_BOTAO_HOVER, self.fonte_media):
             self.estado = "selecao_poder"
             self.jogador_selecionando_poder = 1
             pygame.time.delay(300)
         
-        btn_sair = pygame.Rect(btn_x, 360, btn_largura, btn_altura)
+        # Botão Sair
+        btn_sair = pygame.Rect(btn_x, btn_sair_y, btn_largura, btn_altura)
         if self._desenhar_botao(btn_sair, "SAIR", (160, 60, 60), (180, 80, 80), self.fonte_media):
             pygame.quit()
             sys.exit()
         
+        # Instruções - CENTRALIZADAS DINAMICAMENTE
         instrucoes = [
             "• Cada jogador escolhe um poder no início",
             "• Use poderes estrategicamente durante o jogo",
@@ -395,27 +406,33 @@ class CorridaEstatistica:
             "• Gráficos mostram distribuições em tempo real"
         ]
         
+        instrucoes_y = btn_sair_y + 100
         for i, texto in enumerate(instrucoes):
             linha = self.fonte_pequena.render(texto, True, self.C_TEXTO)
-            self.tela.blit(linha, (self.largura_tela//2 - linha.get_width()//2, 460 + i * 30))
+            self.tela.blit(linha, (self.largura_tela//2 - linha.get_width()//2, instrucoes_y + i * 30))
 
     def _desenhar_selecao_poder(self):
         self.tela.fill(self.C_FUNDO)
         
+        # Título - CENTRALIZADO DINAMICAMENTE
+        titulo_y = self.altura_tela * 0.08
         titulo = self.fonte_grande.render(f"{self.jogadores[self.jogador_selecionando_poder]['nome']} - Escolha seu Poder", 
                                          True, self.jogadores[self.jogador_selecionando_poder]['cor'])
-        self.tela.blit(titulo, (self.largura_tela//2 - titulo.get_width()//2, 30))
+        self.tela.blit(titulo, (self.largura_tela//2 - titulo.get_width()//2, titulo_y))
         
+        # Instrução - CENTRALIZADA DINAMICAMENTE
+        instrucao_y = titulo_y + 50
         instrucao = self.fonte_media.render("Cada jogador pode usar seu poder UMA VEZ durante o jogo", 
                                            True, self.C_DESTAQUE)
-        self.tela.blit(instrucao, (self.largura_tela//2 - instrucao.get_width()//2, 80))
+        self.tela.blit(instrucao, (self.largura_tela//2 - instrucao.get_width()//2, instrucao_y))
         
+        # Desenhar opções de poderes - CENTRALIZADAS DINAMICAMENTE
         poder_largura = 250
         poder_altura = 120
         espacamento = 30
         total_largura = 2 * poder_largura + espacamento
         start_x = (self.largura_tela - total_largura) // 2
-        start_y = 150
+        start_y = self.altura_tela * 0.3  # Posição vertical centralizada
         
         for i, poder in enumerate(self.poderes_disponiveis):
             linha = i // 2
@@ -426,18 +443,23 @@ class CorridaEstatistica:
             
             rect = pygame.Rect(x, y, poder_largura, poder_altura)
             
+            # Sombra
             shadow_rect = pygame.Rect(x + 4, y + 4, poder_largura, poder_altura)
             pygame.draw.rect(self.tela, (10, 10, 10), shadow_rect, border_radius=12)
             
+            # Fundo do poder
             pygame.draw.rect(self.tela, poder['cor'], rect, border_radius=12)
             pygame.draw.rect(self.tela, (240, 240, 240), rect, 2, border_radius=12)
             
+            # Nome do poder
             nome_texto = self.fonte_media.render(poder['nome'], True, (255, 255, 255))
             self.tela.blit(nome_texto, (rect.centerx - nome_texto.get_width()//2, y + 15))
             
+            # Descrição
             desc_texto = self.fonte_pequena.render(poder['descricao'], True, (240, 240, 240))
             self.tela.blit(desc_texto, (rect.centerx - desc_texto.get_width()//2, y + 55))
             
+            # Verificar clique
             mouse_pos = pygame.mouse.get_pos()
             if rect.collidepoint(mouse_pos) and pygame.mouse.get_pressed()[0]:
                 self.selecionar_poder(self.jogador_selecionando_poder, i)
@@ -662,6 +684,11 @@ class CorridaEstatistica:
                         self.reiniciar()
                     if event.key == pygame.K_ESCAPE: 
                         rodando = False
+                # Capturar redimensionamento de tela
+                if event.type == pygame.VIDEORESIZE:
+                    self.largura_tela, self.altura_tela = event.size
+                    self.tela = pygame.display.set_mode((self.largura_tela, self.altura_tela), pygame.RESIZABLE)
+                    self._gerar_layout_tabuleiro()
 
             self.tela.fill(self.C_FUNDO)
             
