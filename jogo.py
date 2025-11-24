@@ -582,7 +582,7 @@ class CorridaEstatistica:
             self.tela.blit(self.img_grafico_cache, (10, y_grafico))
 
     def _gerar_grafico_matplotlib(self, w_inch, h_inch):
-        """Gera gráficos estatísticos precisos em tempo real"""
+        """Gera gráficos estatísticos precisos em tempo real com eixo X dinâmico"""
         todos_dados = []
         for pid in [1, 2]:
             todos_dados.extend(self.jogadores[pid]['dados'])
@@ -593,15 +593,21 @@ class CorridaEstatistica:
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(w_inch + 1, h_inch))
         fig.patch.set_facecolor('#141923')
         
-        # Gráfico 1: Distribuição de frequência CORRETA
+        # Gráfico 1: Distribuição de frequência CORRETA com eixo X dinâmico
         if todos_dados:
-            # Calcular distribuição empírica correta
-            valores_possiveis = range(2, 13)
-            freq_empirica = []
+            # Determinar o intervalo dinâmico do eixo X
+            min_valor = min(todos_dados)
+            max_valor = max(todos_dados)
             
-            for valor in valores_possiveis:
-                freq = todos_dados.count(valor) / len(todos_dados)
-                freq_empirica.append(freq)
+            # Garantir que o mínimo seja pelo menos 2 e o máximo pelo menos 12
+            min_valor = min(2, min_valor)
+            max_valor = max(12, max_valor)
+            
+            # Expandir um pouco o intervalo para melhor visualização
+            min_valor = max(2, min_valor - 1)
+            max_valor = max_valor + 1
+            
+            valores_possiveis = list(range(min_valor, max_valor))
             
             # Plot para cada jogador
             for pid in [1, 2]:
@@ -613,12 +619,26 @@ class CorridaEstatistica:
                         freq_jogador.append(freq)
                     
                     cor = np.array(self.jogadores[pid]['cor']) / 255
-                    ax1.bar(np.array(valores_possiveis) - 0.2 + (pid-1)*0.4, freq_jogador, 
+                    # Ajustar a posição das barras para dois jogadores
+                    offset = (pid - 1.5) * 0.4
+                    valores_plot = [v + offset for v in valores_possiveis]
+                    ax1.bar(valores_plot, freq_jogador, 
                            width=0.35, color=cor, alpha=0.7, label=f"J{pid}")
 
-            # Distribuição teórica CORRETA para dois dados
-            prob_teo = [1/36, 2/36, 3/36, 4/36, 5/36, 6/36, 5/36, 4/36, 3/36, 2/36, 1/36]
+            # Distribuição teórica CORRETA para dois dados (apenas para 2-12)
+            prob_teo = []
+            for valor in valores_possiveis:
+                if 2 <= valor <= 12:
+                    # Cálculo da probabilidade teórica para dois dados
+                    if valor <= 7:
+                        prob = (valor - 1) / 36
+                    else:
+                        prob = (13 - valor) / 36
+                else:
+                    prob = 0
+                prob_teo.append(prob)
             
+            # Plot da distribuição teórica
             ax1.plot(valores_possiveis, prob_teo, 'w-', linewidth=2, alpha=0.8, label="Teórico")
             ax1.fill_between(valores_possiveis, prob_teo, alpha=0.2, color='white')
             
@@ -626,9 +646,14 @@ class CorridaEstatistica:
             ax1.set_xlabel('Soma dos Dados', color='white', fontsize=9)
             ax1.set_ylabel('Frequência Relativa', color='white', fontsize=9)
             ax1.legend(fontsize=7, facecolor='#232337', loc='upper right')
-            ax1.set_xticks(range(2, 13))
-            ax1.grid(True, alpha=0.3, color='gray')
             
+            # Configurar ticks do eixo X
+            if max_valor - min_valor <= 20:  # Mostrar todos os valores se não for muito grande
+                ax1.set_xticks(valores_possiveis)
+            else:  # Caso contrário, mostrar a cada 2 valores
+                ax1.set_xticks([x for x in valores_possiveis if x % 2 == 0])
+            
+            ax1.grid(True, alpha=0.3, color='gray')
             ax1.tick_params(colors='white', labelsize=8)
             ax1.set_facecolor('#232337')
 
